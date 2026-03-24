@@ -230,12 +230,31 @@ services:
     networks:
       - elastic
 
+  jupyter:
+    image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim # Image légère avec uv
+    container_name: jupyter_siem
+    volumes:
+      - ./es_as_siem:/app
+      - certs:/app/certs:ro # Pour que Python puisse vérifier le SSL d'ES
+    working_dir: /app
+    environment:
+      - ELASTICSEARCH_HOSTS=https://es01:9200
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+    command: >
+      sh -c "uv pip install --system jupyterlab elasticsearch && jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root"
+    ports:
+      - "8888:8888"
+    networks:
+      - elastic
+    depends_on:
+      es01:
+        condition: service_healthy
+
   # Suricata - IDS/IPS
   suricata:
     image: jasonish/suricata:latest
     container_name: suricata
     restart: unless-stopped
-    network_mode: host  # Nécessaire pour capturer le trafic réseau
     cap_add:
       - NET_ADMIN
       - NET_RAW
@@ -246,8 +265,8 @@ services:
       - ./suricata/rules:/var/lib/suricata/rules
     environment:
       - SURICATA_OPTIONS=-i eth0 -c /etc/suricata/suricata.yaml
-    # Note: En production, vous devriez configurer une interface réseau spécifique
-    # Pour ce TD, nous utiliserons des logs de test générés
+    networks:
+      - elastic
 
   # Filebeat - Collecteur de logs
   filebeat:
